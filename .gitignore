@@ -1,0 +1,60 @@
+app/demo-app
+
+*.kubeconfig
+kubeconfig
+
+grafana/grafana.ini
+
+.DS_Store
+Thumbs.db
+# binaries
+bin/
+*.exe
+*.out
+*.test
+
+# go
+vendor/
+
+# build artifacts
+dist/
+build/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# linux
+*.swp
+*.swo
+
+# logs
+*.log
+
+# temporary files
+tmp/
+temp/
+
+# kubernetes
+*.kubeconfig
+kubeconfig.yaml
+
+# helm downloads
+*.tar.gz
+
+# env files
+.env
+
+# coverage
+coverage.out
+
+# generated dashboards/export files
+*.json
+
+# local testing
+kind-config.yaml
+
+app/.idea/

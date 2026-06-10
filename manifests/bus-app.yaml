@@ -1,0 +1,132 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bus-app
+  labels:
+    app: bus-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bus-app
+  template:
+    metadata:
+      labels:
+        app: bus-app
+    spec:
+      containers:
+        - name: bus-app
+          image: registry:5000/bus-app:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 100m
+            limits:
+              memory: 128Mi
+              cpu: 500m
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bus-app
+  labels:
+    app: bus-app
+spec:
+  selector:
+    app: bus-app
+  type: NodePort
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: bus-app
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: bus-app
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: bus-app-alerts
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: bus-app
+      rules:
+        - alert: BusAppDown
+          expr: absent(up{job="bus-app"})
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            summary: Bus app is down
+            description: Prometheus cannot reach bus-app. The deployment may have
+              0 replicas.
+        - alert: BusAppHighTraffic
+          expr: sum(rate(http_requests_total{job="bus-app"}[1m])) > 50
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            summary: Unusually high traffic on bus-app
+            description: 'Request rate is {{ $value | printf "%.1f" }} req/s (threshold:
+              50).'
+        - alert: BusAppHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{job="bus-app", status="404"}[1m]))
+            /
+            sum(rate(http_requests_total{job="bus-app"}[1m]))
+            * 100 > 10
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: High 404 error rate on bus-app
+            description: '{{ $value | printf "%.1f" }}% of requests are returning
+              404.'
+        - alert: BusAppHighLatency
+          expr: |
+            histogram_quantile(0.99,
+              sum by (le) (
+                rate(http_request_duration_seconds_bucket{job="bus-app"}[5m])
+              )
+            ) > 1.5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: High p99 latency on bus-app
+            description: 'p99 response time is {{ $value | printf "%.2f" }}s (threshold:
+              1.5s).'
+        - alert: BusAppMemoryLeakSuspected
+          expr: increase(bus_stop_subscribers_total{job="bus-app"}[1m]) > 20
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: Possible memory leak in bus-app
+            description: bus_stop_subscribers_total grew by {{ $value | printf "%.0f" }}
+              in the last minute and never decreases.

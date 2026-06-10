@@ -1,0 +1,32 @@
+---
+services:
+  registry:
+    image: registry:2
+    container_name: bus-registry
+    ports: [5000:5000]
+    restart: unless-stopped
+  manifests-init:
+    image: alpine
+    volumes: [./manifests:/source:ro, k3s-manifests:/target]
+    command: sh -c "cp -r /source/. /target/"
+  k3s:
+    image: rancher/k3s:latest
+    container_name: k3s-cluster
+    command: server --disable traefik --write-kubeconfig-mode=644
+    privileged: true
+    depends_on:
+      registry:
+        condition: service_started
+      manifests-init:
+        condition: service_completed_successfully
+    ports:
+      - 6443:6443  # kubectl access
+      - 3000:30000  # Grafana
+      - 9090:30090  # Prometheus
+      - 8080:30080  # bus-app
+    volumes:
+      - k3s-manifests:/var/lib/rancher/k3s/server/manifests
+      - ./registries.yaml:/etc/rancher/k3s/registries.yaml
+    restart: unless-stopped
+volumes:
+  k3s-manifests:
